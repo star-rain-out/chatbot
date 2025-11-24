@@ -157,25 +157,87 @@ async def call_vision_api(image_data: bytes) -> Dict[str, Any]:
     """
     Call computer vision API for landmark recognition
     """
-    api_key = os.getenv("AZURE_VISION_KEY") or os.getenv("GOOGLE_VISION_API_KEY")
+    # Check for available API keys
+    baidu_key = os.getenv("BAIDU_API_KEY")
+    google_key = os.getenv("GOOGLE_VISION_API_KEY")
+    azure_key = os.getenv("AZURE_VISION_KEY")
 
-    if not api_key:
+    if not (baidu_key or google_key or azure_key):
         # No API key found, return None to trigger smart simulation
         return None
 
     try:
+        # Baidu AI implementation (Preferred for China region)
+        if baidu_key and os.getenv("BAIDU_SECRET_KEY"):
+            return await call_baidu_vision(image_data)
+
         # Google Vision API implementation
-        if os.getenv("GOOGLE_VISION_API_KEY"):
+        elif google_key:
             return await call_google_vision(image_data)
 
         # Azure Computer Vision implementation
-        elif os.getenv("AZURE_VISION_KEY"):
+        elif azure_key:
             # Placeholder for Azure implementation
             return None
 
     except Exception as e:
         print(f"API Error: {e}")
         return None
+
+async def get_baidu_access_token() -> str:
+    """
+    Get Access Token for Baidu AI
+    """
+    api_key = os.getenv("BAIDU_API_KEY")
+    secret_key = os.getenv("BAIDU_SECRET_KEY")
+    
+    url = "https://aip.baidubce.com/oauth/2.0/token"
+    params = {
+        "grant_type": "client_credentials",
+        "client_id": api_key,
+        "client_secret": secret_key
+    }
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url, params=params)
+        response.raise_for_status()
+        return response.json().get("access_token")
+
+async def call_baidu_vision(image_data: bytes) -> Dict[str, Any]:
+    """
+    Call Baidu AI Landmark Recognition API
+    """
+    try:
+        access_token = await get_baidu_access_token()
+        if not access_token:
+            return None
+            
+        url = f"https://aip.baidubce.com/rest/2.0/image-classify/v1/landmark?access_token={access_token}"
+        
+        # Baidu expects base64 encoded image
+        image_b64 = base64.b64encode(image_data).decode()
+        
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        data = {"image": image_b64}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get("result") and result["result"].get("landmark"):
+                landmark_name = result["result"]["landmark"]
+                return {
+                    "landmark": landmark_name,
+                    "confidence": 0.9,
+                    "simulated": False,
+                    "source": "baidu"
+                }
+    except Exception as e:
+        print(f"Baidu API Error: {e}")
+        return None
+    
+    return None
 
 async def smart_simulate_landmark_recognition(filename: str) -> Dict[str, Any]:
     """
@@ -244,7 +306,8 @@ async def call_google_vision(image_data: bytes) -> Dict[str, Any]:
             return {
                 "landmark": landmark.get("description", "").lower().replace(" ", "_"),
                 "confidence": landmark.get("score", 0.5),
-                "simulated": False
+                "simulated": False,
+                "source": "google"
             }
 
     return None
@@ -315,6 +378,21 @@ async def recognize_landmark(image: UploadFile = File(...)):
                     break
 
         if not landmark_info:
+            # If we have a name from Baidu but no info in DB, show generic info with the name
+            if landmark_key and not is_simulated:
+                 return {
+                    "result": f"""🏛️ **{landmark_key}**
+
+📍 **Location:** China (Identified by AI)
+
+🎯 **Confidence:** {confidence:.1%}
+
+💡 **Note:** I recognized this as "{landmark_key}", but I don't have detailed travel tips for it in my database yet.
+
+---
+🌟 **Want to know more?** You can ask me specific questions about this place!"""
+                }
+
             return {
                 "result": """❓ **Landmark Not Recognized**
 
@@ -339,7 +417,9 @@ I couldn't identify this landmark with confidence. Please try with:
             if is_random:
                 simulation_note = "\n\n*(Note: Running in demo mode. Random landmark selected because no API key was found and filename didn't match known landmarks.)*"
             else:
-                simulation_note = "\n\n*(Note: Identified based on filename in demo mode. Add Google Vision API key for AI recognition.)*"
+                simulation_note = "\n\n*(Note: Identified based on filename in demo mode. Add Baidu/Google API key for AI recognition.)*"
+        else:
+             simulation_note = "\n\n*(Note: Identified by AI Vision)*"
 
         formatted_response = f"""🏛️ **{landmark_info["name"]}**
 
