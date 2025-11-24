@@ -10,6 +10,8 @@ import uuid
 import os
 import random
 from huggingface_hub import InferenceClient
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 router = APIRouter()
 
@@ -77,39 +79,79 @@ HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 # Default model if not specified
 HF_MODEL_ID = "Salesforce/blip-image-captioning-large"
 
-def caption_image_via_hf(image_bytes: bytes) -> Optional[str]:
-    """Call Hugging Face image captioning model to get a textual description."""
-    
-    # 1. 检查 Token 是否存在
+API_URL = "https://router.huggingface.co/hf-inference/models/nlpconnect/vit-gpt2-image-captioning"
+
+PROXY_URL = "http://127.0.0.1:1080"
+def caption_image_via_hf(image_bytes: bytes):
     if not HF_API_TOKEN:
-        print("DEBUG: HF_API_TOKEN is missing")
+        print("DEBUG: 缺少 HF_API_TOKEN")
         return None
 
-    print(f"DEBUG: Starting HF captioning. Model: {HF_MODEL_ID}")
+    # 保持重试机制，防止 IncompleteRead
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["POST"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}"
+    }
+    
+    proxies = {
+        "http": PROXY_URL,
+        "https": PROXY_URL
+    }
+
+    print(f"DEBUG: 正在请求新版 Router 接口: {API_URL}")
 
     try:
-        # 2. 初始化 Client
-        client = InferenceClient(token=HF_API_TOKEN)
+        response = session.post(
+            API_URL, 
+            headers=headers, 
+            data=image_bytes, 
+            proxies=proxies,
+            timeout=60, 
+            stream=True 
+        )
         
-        # 3. 将图片字节流转换为 PIL Image 对象 (这是关键，Hugging Face 库对 PIL 支持最好)
-        image = Image.open(io.BytesIO(image_bytes))
+        print(f"DEBUG: 状态码: {response.status_code}")
+
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                caption = result[0].get("generated_text")
+                print(f"DEBUG: ✅ 成功获取描述: {caption}")
+                return caption
+            else:
+                print(f"DEBUG: 返回格式异常: {result}")
+                return None
         
-        # 4. 调用 image_to_text
-        # 注意：某些免费 API 端点可能处于 "Cold Boot" (冷启动) 状态，第一次调用会超时
-        caption = client.image_to_text(image, model=HF_MODEL_ID)
+        elif response.status_code == 503:
+            print("DEBUG: ⚠️ 模型正在启动中 (Model Loading)... 请等待 30 秒后再试。")
+            return None
         
-        print(f"DEBUG: HF Success! Caption: {caption}")
-        return caption
+        # 如果还是 404，那真的就是此时此刻这个模型炸了
+        elif response.status_code == 404:
+             print("DEBUG: ❌ 404 Not Found. 尝试切换备用模型...")
+             return None
+            
+        else:
+            print(f"DEBUG: ❌ 请求失败，状态码 {response.status_code}")
+            # 尝试打印前 100 个字符看看是不是又是 HTML
+            print(f"DEBUG: 响应内容: {response.text[:200]}")
+            return None
 
     except Exception as e:
-        # 5. 打印详细的错误信息以便调试
-        print(f"DEBUG: Error details: {type(e).__name__}: {str(e)}")
-        
-        # 特殊情况处理：如果模型还在加载中 (Model is loading)
-        if "503" in str(e) or "loading" in str(e).lower():
-            print("DEBUG: Model is currently loading on Hugging Face servers.")
-        
+        print(f"DEBUG: 发生错误: {e}")
         return None
+    finally:
+        session.close()
 
 
 def build_analysis_from_caption(caption: str) -> dict:

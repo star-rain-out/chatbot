@@ -7,7 +7,8 @@ from routers import (
     tools_attraction_tickets, tools_hotel_booking, tools_transport_route,
     tools_china_experience, tools_visa_info, tools_travel_insurance,
     tools_budget_estimator,
-    tools_ticket_recognition
+    tools_ticket_recognition,
+    tools_image_search
 )
 from fastapi.staticfiles import StaticFiles
 import os
@@ -53,6 +54,7 @@ app.include_router(tools_visa_info.router, prefix="/api/visa_info", tags=["Visa 
 app.include_router(tools_travel_insurance.router, prefix="/api/travel_insurance", tags=["Travel Insurance"])
 app.include_router(tools_budget_estimator.router, prefix="/api/budget_estimator", tags=["Budget Estimator"])
 app.include_router(tools_ticket_recognition.router, prefix="/api/ticket_recognition", tags=["Ticket Recognition"])
+app.include_router(tools_image_search.router, prefix="/api/image_search", tags=["Image Search"])
 
 @app.get("/")
 def root():
