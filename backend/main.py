@@ -16,18 +16,23 @@ import os
 if not os.path.exists("static/avatars"):
     os.makedirs("static/avatars")
 
-  
-app = FastAPI()  
-  
-# Allow cross-origin requests (required for React frontend)  
-app.add_middleware(  
-    CORSMiddleware,  
-    allow_origins=["*"],  
-    allow_credentials=True,  
-    allow_methods=["*"],  
-    allow_headers=["*"],  
-)  
-  
+from dotenv import load_dotenv
+
+# Load environment variables from backend/.env
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+
+
+app = FastAPI()
+
+# Allow cross-origin requests (required for React frontend)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount routes, each module has independent path prefix
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(chat_general.router, prefix="/api/chat", tags=["General Chat"])
@@ -48,9 +53,9 @@ app.include_router(tools_visa_info.router, prefix="/api/visa_info", tags=["Visa 
 app.include_router(tools_travel_insurance.router, prefix="/api/travel_insurance", tags=["Travel Insurance"])
 app.include_router(tools_budget_estimator.router, prefix="/api/budget_estimator", tags=["Budget Estimator"])
 app.include_router(tools_ticket_recognition.router, prefix="/api/ticket_recognition", tags=["Ticket Recognition"])
-  
-@app.get("/")  
-def root():  
+
+@app.get("/")
+def root():
     return {"message": "Backend is running"}
     # Reload for ticket recognition updates
 

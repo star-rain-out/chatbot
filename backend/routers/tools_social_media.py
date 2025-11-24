@@ -70,27 +70,105 @@ MOCK_SCENARIOS = [
     }
 ]
 
-def analyze_image_with_base64(base64_image: str) -> dict:
+# Optional: Hugging Face image captioning integration
+# If you set HF_API_TOKEN (and optionally HF_IMAGE_CAPTIONING_URL),
+# the service will call a real image captioning model before falling back
+# to local mock analysis.
+HF_IMAGE_CAPTIONING_URL = os.getenv(
+    "HF_IMAGE_CAPTIONING_URL",
+    "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
+)
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+
+
+def caption_image_via_hf(image_bytes: bytes) -> Optional[str]:
+    """Call Hugging Face image captioning model to get a textual description.
+
+    Returns a caption string on success, or None on failure / when not configured.
     """
-    Analyze image content - uses varied mock data for demo
-    In production, integrate with Google Vision API or similar
+    if not HF_IMAGE_CAPTIONING_URL:
+        return None
+
+    headers = {"Content-Type": "application/octet-stream"}
+    if HF_API_TOKEN:
+        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
+
+    try:
+        response = requests.post(
+            HF_IMAGE_CAPTIONING_URL,
+            headers=headers,
+            data=image_bytes,
+            timeout=30,
+        )
+        # If unauthorized or model not available, fall back to local mock
+        if response.status_code >= 400:
+            return None
+
+        data = response.json()
+        # Typical HF image captioning models return a list of dicts
+        # like: [{"generated_text": "..."}]
+        if isinstance(data, list) and data:
+            item = data[0]
+            if isinstance(item, dict) and "generated_text" in item:
+                return item["generated_text"]
+        # Some models may return {"generated_text": "..."}
+        if isinstance(data, dict) and "generated_text" in data:
+            return data["generated_text"]
+
+        return None
+    except Exception:
+        # Any error -> let caller fall back to local mock logic
+        return None
+
+
+def build_analysis_from_caption(caption: str) -> dict:
+    """Build an analysis dict compatible with generate_social_media_caption
+    from a plain caption string.
+    """
+    if not caption:
+        caption = "A beautiful moment worth sharing."
+    return {
+        "description": caption,
+        "objects": [],
+        "colors": [],
+        "mood": "beautiful, amazing",
+        "location_type": "scene",
+        "activities": [],
+    }
+
+
+def analyze_image_with_base64(base64_image: str) -> dict:
+    """Analyze image content.
+
+    Priority:
+    1. Try real image captioning via Hugging Face Inference API (if configured)
+       to get a textual description from the actual image contents.
+    2. If that fails or is not configured, fall back to the existing
+       heuristic + mock scenarios.
     """
     try:
-        # Decode and analyze basic image properties for variety
+        # Decode image bytes
         img_data = base64.b64decode(base64_image)
+
+        # 1) Try real captioning via Hugging Face (if configured)
+        caption = caption_image_via_hf(img_data)
+        if caption:
+            return build_analysis_from_caption(caption)
+
+        # 2) Fallback: local heuristic using color distribution
         img = Image.open(io.BytesIO(img_data))
-        
+
         # Simple heuristic: choose scenario based on image dimensions and average color
         width, height = img.size
         aspect_ratio = width / height if height > 0 else 1.0
-        
+
         # Get average color to help choose scenario
         img_small = img.resize((10, 10))
         pixels = list(img_small.getdata())
         avg_red = sum(p[0] for p in pixels if isinstance(p, tuple)) / len(pixels)
         avg_green = sum(p[1] for p in pixels if isinstance(p, tuple)) / len(pixels)
         avg_blue = sum(p[2] for p in pixels if isinstance(p, tuple)) / len(pixels)
-        
+
         # Heuristic to pick scenario
         if avg_red > avg_blue and avg_red > avg_green:
             # More red/warm tones -> food or sunset
@@ -104,11 +182,11 @@ def analyze_image_with_base64(base64_image: str) -> dict:
         else:
             # Balanced or neutral -> cafe or urban
             scenario = random.choice([MOCK_SCENARIOS[3], MOCK_SCENARIOS[2]])
-        
+
         return scenario
-        
-    except Exception as e:
-        # Fallback to random scenario if analysis fails
+
+    except Exception:
+        # Fallback to random scenario if anything goes wrong
         return random.choice(MOCK_SCENARIOS)
 
 def generate_social_media_caption(analysis: dict, platform: str = "general", tone: str = "friendly", hashtags_count: int = 5) -> dict:
@@ -119,7 +197,7 @@ def generate_social_media_caption(analysis: dict, platform: str = "general", ton
     objects = analysis["objects"]
     mood = analysis["mood"]
     location_type = analysis["location_type"]
-    
+
     # Expanded caption templates
     base_templates = {
         "general": [
@@ -149,7 +227,7 @@ def generate_social_media_caption(analysis: dict, platform: str = "general", ton
             f"💫 {description} #lifestyle #moments"
         ]
     }
-    
+
     # Tone adjustments
     tone_modifiers = {
         "professional": {
@@ -173,37 +251,37 @@ def generate_social_media_caption(analysis: dict, platform: str = "general", ton
             "style": "humorous"
         }
     }
-    
+
     # Generate relevant hashtags
     hashtag_pool = []
     for obj in objects[:3]:  # Limit to top 3 objects
         hashtag_pool.append(f"#{obj.replace(' ', '')}")
-    
+
     # Add mood-based hashtags
     mood_words = mood.split(", ")
     for word in mood_words[:2]:
         hashtag_pool.append(f"#{word.replace(' ', '')}")
-    
+
     # Add general popular hashtags
     general_tags = ["#photography", "#life", "#beautiful", "#moments", "#travel", "#instagood", "#photooftheday"]
     hashtag_pool.extend(random.sample(general_tags, 3))
-    
+
     # Remove duplicates and select
     unique_hashtags = list(set(hashtag_pool))
     selected_hashtags = unique_hashtags[:hashtags_count]
     hashtags_text = " ".join(selected_hashtags)
-    
+
     # Select template and generate caption
     templates = base_templates.get(platform, base_templates["general"])
     selected_template = random.choice(templates)
-    
+
     # Apply tone
     modifier = tone_modifiers.get(tone, tone_modifiers["friendly"])
     caption = selected_template.format(description=description, hashtags=hashtags_text)
-    
+
     if tone != "general" and tone in tone_modifiers:
         caption = f"{modifier['prefix']} {caption}{modifier['suffix']}"
-    
+
     return {
         "caption": caption,
         "hashtags": selected_hashtags,
@@ -227,7 +305,7 @@ async def generate_social_media_caption_from_image(
     """
     Generate social media captions from uploaded image
     """
-    
+
     if not image and not image_data:
         return {
             "bot_response": """📸 **Social Media Caption Generator**
@@ -248,7 +326,7 @@ Upload an image and I'll generate perfect captions for your social media posts!
 
 **Supported platforms:**
 • General Format
-• WeChat Moments  
+• WeChat Moments
 • Sina Weibo
 • Instagram
 • Twitter
@@ -261,7 +339,7 @@ Upload an image to get started! ✨""",
                 "Upload product photos"
             ]
         }
-    
+
     try:
         # Process image
         image_content = None
@@ -273,20 +351,20 @@ Upload an image to get started! ✨""",
             if image_data.startswith('data:image'):
                 image_data = image_data.split(',')[1]
             image_content = base64.b64decode(image_data)
-        
+
         # Verify image
         try:
             img = Image.open(io.BytesIO(image_content))
             img.verify()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
-        
+
         # Convert to base64 for analysis
         base64_image = base64.b64encode(image_content).decode('utf-8')
-        
+
         # Analyze image
         analysis = analyze_image_with_base64(base64_image)
-        
+
         # Generate caption
         result = generate_social_media_caption(
             analysis=analysis,
@@ -294,18 +372,18 @@ Upload an image to get started! ✨""",
             tone=tone,
             hashtags_count=hashtags_count
         )
-        
+
         # Build response
         platform_names = {
             "general": "General", "wechat": "WeChat", "weibo": "Weibo",
             "instagram": "Instagram", "twitter": "Twitter"
         }
-        
+
         tone_names = {
             "professional": "Professional", "casual": "Casual",
             "friendly": "Friendly", "humorous": "Humorous"
         }
-        
+
         response_text = f"""📸 **Social Media Caption Generated!**
 
 **Platform**: {platform_names.get(platform, 'General')}
@@ -333,7 +411,7 @@ Upload an image to get started! ✨""",
             "tone": tone,
             "image_analysis": result['analysis_summary']
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
