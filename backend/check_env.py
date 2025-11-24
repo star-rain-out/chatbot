@@ -41,5 +41,14 @@ def check_env():
     else:
         print("\n⚠️  Some environment variables are missing. Please check your .env file.")
 
+    # Check for huggingface_hub library
+    print("\nChecking dependencies:")
+    try:
+        import huggingface_hub
+        print(f"✅ huggingface_hub library installed (version: {huggingface_hub.__version__})")
+    except ImportError:
+        print("❌ huggingface_hub library NOT installed")
+        print("   Run: pip install huggingface_hub")
+
 if __name__ == "__main__":
     check_env()

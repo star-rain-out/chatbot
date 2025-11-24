@@ -9,6 +9,7 @@ import requests
 import uuid
 import os
 import random
+from huggingface_hub import InferenceClient
 
 router = APIRouter()
 
@@ -71,78 +72,39 @@ MOCK_SCENARIOS = [
 ]
 
 # Optional: Hugging Face image captioning integration
-# If you set HF_API_TOKEN (and optionally HF_IMAGE_CAPTIONING_URL),
-# the service will call a real image captioning model before falling back
-# to local mock analysis.
-HF_IMAGE_CAPTIONING_URL = os.getenv(
-    "HF_IMAGE_CAPTIONING_URL",
-    "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
-)
+# If you set HF_API_TOKEN, the service will call a real image captioning model.
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-
+# Default model if not specified
+HF_MODEL_ID = "Salesforce/blip-image-captioning-large"
 
 def caption_image_via_hf(image_bytes: bytes) -> Optional[str]:
     """Call Hugging Face image captioning model to get a textual description.
 
     Returns a caption string on success, or None on failure / when not configured.
     """
-    print(f"DEBUG: Starting HF captioning. URL configured: {bool(HF_IMAGE_CAPTIONING_URL)}")
-    
-    if not HF_IMAGE_CAPTIONING_URL:
-        print("DEBUG: HF_IMAGE_CAPTIONING_URL is missing")
+    if not HF_API_TOKEN:
+        print("DEBUG: HF_API_TOKEN is missing")
         return None
 
-    headers = {"Content-Type": "application/octet-stream"}
-    if HF_API_TOKEN:
-        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
-        print("DEBUG: HF_API_TOKEN found and added to headers")
-    else:
-        print("DEBUG: HF_API_TOKEN is missing")
+    print(f"DEBUG: Starting HF captioning using InferenceClient. Model: {HF_MODEL_ID}")
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            print(f"DEBUG: Sending request to {HF_IMAGE_CAPTIONING_URL} (Attempt {attempt + 1}/{max_retries})...")
-            response = requests.post(
-                HF_IMAGE_CAPTIONING_URL,
-                headers=headers,
-                data=image_bytes,
-                timeout=60,  # Increased timeout to 60 seconds
-            )
-            print(f"DEBUG: HF Response Status: {response.status_code}")
-            
-            # If unauthorized or model not available, fall back to local mock
-            if response.status_code >= 400:
-                print(f"DEBUG: HF Error Body: {response.text}")
-                return None
+    try:
+        client = InferenceClient(token=HF_API_TOKEN)
+        
+        # Convert bytes to PIL Image for the library (it handles bytes too, but PIL is safer)
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # The library handles retries and connection details automatically
+        # image_to_text returns a generated text string
+        caption = client.image_to_text(image, model=HF_MODEL_ID)
+        
+        print(f"DEBUG: HF Response Data: {caption}")
+        return caption
 
-            data = response.json()
-            print(f"DEBUG: HF Response Data: {str(data)[:200]}...") # Log first 200 chars
-            
-            # Typical HF image captioning models return a list of dicts
-            # like: [{"generated_text": "..."}]
-            if isinstance(data, list) and data:
-                item = data[0]
-                if isinstance(item, dict) and "generated_text" in item:
-                    return item["generated_text"]
-            # Some models may return {"generated_text": "..."}
-            if isinstance(data, dict) and "generated_text" in data:
-                return data["generated_text"]
-
-            print("DEBUG: Could not parse HF response format")
-            return None
-            
-        except requests.exceptions.Timeout:
-            print(f"DEBUG: Timeout on attempt {attempt + 1}")
-            if attempt == max_retries - 1:
-                print("DEBUG: Max retries reached. Giving up.")
-                return None
-            continue # Try again
-            
-        except Exception as e:
-            print(f"DEBUG: Exception in caption_image_via_hf: {str(e)}")
-            # Any error -> let caller fall back to local mock logic
-            return None
+    except Exception as e:
+        print(f"DEBUG: Exception in caption_image_via_hf: {str(e)}")
+        # Any error -> let caller fall back to local mock logic
+        return None
 
 
 def build_analysis_from_caption(caption: str) -> dict:
