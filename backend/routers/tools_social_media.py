@@ -86,39 +86,63 @@ def caption_image_via_hf(image_bytes: bytes) -> Optional[str]:
 
     Returns a caption string on success, or None on failure / when not configured.
     """
+    print(f"DEBUG: Starting HF captioning. URL configured: {bool(HF_IMAGE_CAPTIONING_URL)}")
+    
     if not HF_IMAGE_CAPTIONING_URL:
+        print("DEBUG: HF_IMAGE_CAPTIONING_URL is missing")
         return None
 
     headers = {"Content-Type": "application/octet-stream"}
     if HF_API_TOKEN:
         headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
+        print("DEBUG: HF_API_TOKEN found and added to headers")
+    else:
+        print("DEBUG: HF_API_TOKEN is missing")
 
-    try:
-        response = requests.post(
-            HF_IMAGE_CAPTIONING_URL,
-            headers=headers,
-            data=image_bytes,
-            timeout=30,
-        )
-        # If unauthorized or model not available, fall back to local mock
-        if response.status_code >= 400:
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print(f"DEBUG: Sending request to {HF_IMAGE_CAPTIONING_URL} (Attempt {attempt + 1}/{max_retries})...")
+            response = requests.post(
+                HF_IMAGE_CAPTIONING_URL,
+                headers=headers,
+                data=image_bytes,
+                timeout=60,  # Increased timeout to 60 seconds
+            )
+            print(f"DEBUG: HF Response Status: {response.status_code}")
+            
+            # If unauthorized or model not available, fall back to local mock
+            if response.status_code >= 400:
+                print(f"DEBUG: HF Error Body: {response.text}")
+                return None
+
+            data = response.json()
+            print(f"DEBUG: HF Response Data: {str(data)[:200]}...") # Log first 200 chars
+            
+            # Typical HF image captioning models return a list of dicts
+            # like: [{"generated_text": "..."}]
+            if isinstance(data, list) and data:
+                item = data[0]
+                if isinstance(item, dict) and "generated_text" in item:
+                    return item["generated_text"]
+            # Some models may return {"generated_text": "..."}
+            if isinstance(data, dict) and "generated_text" in data:
+                return data["generated_text"]
+
+            print("DEBUG: Could not parse HF response format")
             return None
-
-        data = response.json()
-        # Typical HF image captioning models return a list of dicts
-        # like: [{"generated_text": "..."}]
-        if isinstance(data, list) and data:
-            item = data[0]
-            if isinstance(item, dict) and "generated_text" in item:
-                return item["generated_text"]
-        # Some models may return {"generated_text": "..."}
-        if isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"]
-
-        return None
-    except Exception:
-        # Any error -> let caller fall back to local mock logic
-        return None
+            
+        except requests.exceptions.Timeout:
+            print(f"DEBUG: Timeout on attempt {attempt + 1}")
+            if attempt == max_retries - 1:
+                print("DEBUG: Max retries reached. Giving up.")
+                return None
+            continue # Try again
+            
+        except Exception as e:
+            print(f"DEBUG: Exception in caption_image_via_hf: {str(e)}")
+            # Any error -> let caller fall back to local mock logic
+            return None
 
 
 def build_analysis_from_caption(caption: str) -> dict:
@@ -134,6 +158,7 @@ def build_analysis_from_caption(caption: str) -> dict:
         "mood": "beautiful, amazing",
         "location_type": "scene",
         "activities": [],
+        "source": "huggingface"
     }
 
 
@@ -402,6 +427,10 @@ Upload an image to get started! ✨""",
 • Scene: {result['analysis_summary']['location_type']}
 
 ✨ Copy and paste to use! You can adjust the caption as needed."""
+
+        # Check if Hugging Face was used and prepend success message
+        if result['analysis_summary'].get('source') == 'huggingface':
+            response_text = "hugging face return succussful:\n\n" + response_text
 
         return {
             "bot_response": response_text,

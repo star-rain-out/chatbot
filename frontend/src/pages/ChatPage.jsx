@@ -270,6 +270,9 @@ const ChatPage = () => {
           }]);
         }
         setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
       return;
     }
@@ -426,6 +429,9 @@ const ChatPage = () => {
     } finally {
       setUploading(false);
       setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -517,6 +523,9 @@ const ChatPage = () => {
     } finally {
       setUploading(false);
       setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -691,6 +700,7 @@ const ChatPage = () => {
                   onChange={handleFileSelect}
                   className="hidden"
                   id="social-media-image-upload"
+                  ref={fileInputRef}
                 />
                 <label htmlFor="social-media-image-upload" className="cursor-pointer">
                   <div className="space-y-2">
@@ -726,6 +736,7 @@ const ChatPage = () => {
                   onChange={handleFileSelect}
                   className="hidden"
                   id="image-upload"
+                  ref={fileInputRef}
                 />
                 <label htmlFor="image-upload" className="cursor-pointer">
                   <div className="space-y-2">
@@ -781,6 +792,7 @@ const ChatPage = () => {
                   onChange={handleFileSelect}
                   className="hidden"
                   id="ticket-upload"
+                  ref={fileInputRef}
                 />
                 <label htmlFor="ticket-upload" className="cursor-pointer">
                   <div className="space-y-2">
