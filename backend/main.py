@@ -52,7 +52,7 @@ app.include_router(tools_ticket_recognition.router, prefix="/api/ticket_recognit
 @app.get("/")  
 def root():  
     return {"message": "Backend is running"}
-    # Trigger reload
+    # Reload for ticket recognition updates
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

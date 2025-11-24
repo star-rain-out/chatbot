@@ -196,17 +196,65 @@ const ChatPage = () => {
 
           setMessages(prev => prev.filter(msg => !msg.isTyping));
 
-          const extractedInfo = res.data;
-          const responseText = `
-**Ticket Information Extracted:**
-- **Origin:** ${extractedInfo.origin}
-- **Destination:** ${extractedInfo.destination}
-- **Date:** ${extractedInfo.date}
-- **Ticket Number:** ${extractedInfo.ticket_number}
+          const info = res.data;
 
-**Raw Text:**
-${extractedInfo.raw_text.substring(0, 200)}...
-                `;
+          // Build sections based on available data
+          let sections = [];
+
+          // Passenger Information
+          if (info.passenger_name && info.passenger_name !== "Not found") {
+            sections.push(`**👤 Passenger Information:**
+- Name: ${info.passenger_name}`);
+          }
+
+          // Flight Information
+          let flightInfo = [];
+          if (info.airline && info.airline !== "Not found") {
+            flightInfo.push(`- Airline: ${info.airline}`);
+          }
+          if (info.flight_number && info.flight_number !== "Not found") {
+            flightInfo.push(`- Flight Number: ${info.flight_number}`);
+          }
+          if (flightInfo.length > 0) {
+            sections.push(`**✈️ Flight Information:**\n${flightInfo.join('\n')}`);
+          }
+
+          // Trip Details
+          let tripDetails = [];
+          if (info.origin && info.origin !== "Not found") {
+            tripDetails.push(`- Origin: ${info.origin}`);
+          }
+          if (info.destination && info.destination !== "Not found") {
+            tripDetails.push(`- Destination: ${info.destination}`);
+          }
+          if (info.departure_date && info.departure_date !== "Not found") {
+            tripDetails.push(`- Date: ${info.departure_date}`);
+          }
+          if (info.departure_time && info.departure_time !== "Not found") {
+            tripDetails.push(`- Departure Time: ${info.departure_time}`);
+          }
+          if (info.arrival_time && info.arrival_time !== "Not found") {
+            tripDetails.push(`- Arrival Time: ${info.arrival_time}`);
+          }
+          if (tripDetails.length > 0) {
+            sections.push(`**🗺️ Trip Details:**\n${tripDetails.join('\n')}`);
+          }
+
+          // Booking Details
+          let bookingDetails = [];
+          if (info.confirmation_number && info.confirmation_number !== "Not found") {
+            bookingDetails.push(`- Confirmation: ${info.confirmation_number}`);
+          }
+          if (info.booking_reference && info.booking_reference !== "Not found") {
+            bookingDetails.push(`- Booking Reference: ${info.booking_reference}`);
+          }
+          if (bookingDetails.length > 0) {
+            sections.push(`**📋 Booking Details:**\n${bookingDetails.join('\n')}`);
+          }
+
+          const responseText = sections.length > 0
+            ? sections.join('\n\n')
+            : 'Unable to extract ticket information from the PDF. Please ensure the file is a valid ticket.';
 
           const botMsg = {
             sender: 'bot',
