@@ -220,6 +220,12 @@ const Dashboard = () => {
       name: '🎫 Ticket Recognition',
       desc: 'Extract info from PDF tickets',
       color: 'from-orange-500 to-red-600'
+    },
+    {
+      id: 'image_search',
+      name: '🖼️ Image Search',
+      desc: 'Find beautiful images of any place',
+      color: 'from-cyan-400 to-blue-600'
     }
   ];
 

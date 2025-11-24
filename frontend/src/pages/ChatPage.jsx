@@ -32,6 +32,7 @@ const ChatPage = () => {
       case 'landmark': return null; // Special case - uses file upload
       case 'social_media': return null; // Special case - uses file upload
       case 'timezone': return 'http://localhost:8000/api/timezone/convert';
+      case 'image_search': return 'http://localhost:8000/api/image_search/search';
       // 新增的中国旅游功能
       case 'attraction_tickets': return 'http://localhost:8000/api/attraction_tickets/query';
       case 'hotel_booking': return 'http://localhost:8000/api/hotel_recommendations/recommend';
@@ -140,6 +141,12 @@ const ChatPage = () => {
           title: '🎫 Ticket Recognition',
           placeholder: 'Upload a PDF ticket to extract information...',
           welcomeMessage: 'Welcome to Ticket Recognition! Please upload a PDF file of your itinerary ticket, and I will extract the key information for you.'
+        };
+      case 'image_search':
+        return {
+          title: '🖼️ Image Search',
+          placeholder: 'Enter a place or landmark (e.g., Great Wall, Eiffel Tower)...',
+          welcomeMessage: 'Welcome to Image Search! Tell me what place or landmark you want to see, and I will find 3 beautiful images for you. Perfect for travel inspiration!'
         };
       default:
         return {
@@ -347,6 +354,9 @@ const ChatPage = () => {
         case 'travel':
           requestBody = { question: currentInput };
           break;
+        case 'image_search':
+          requestBody = { query: currentInput };
+          break;
         default:
           requestBody = { user_input: currentInput, text: currentInput };
       }
@@ -361,6 +371,12 @@ const ChatPage = () => {
         text: res.data.bot_response || res.data.response || res.data.result || 'Processing complete',
         audio: res.data.audio_base64
       };
+
+      // Add images if available (for image_search feature)
+      if (res.data.images && Array.isArray(res.data.images) && res.data.images.length > 0) {
+        botMsg.images = res.data.images;
+      }
+
       setMessages(prev => [...prev, botMsg]);
 
     } catch (error) {
@@ -641,6 +657,32 @@ const ChatPage = () => {
                   <div className="mt-3 pt-2 border-t border-gray-100">
                     <p className="text-xs text-gray-500 mb-1">🔊 Pronunciation:</p>
                     <audio controls src={`data:audio/mp3;base64,${msg.audio}`} className="w-full h-8" />
+                  </div>
+                )}
+                {msg.images && msg.images.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2">🖼️ Images:</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {msg.images.map((img, imgIdx) => (
+                        <div key={imgIdx} className="rounded-lg overflow-hidden border border-gray-200">
+                          <img
+                            src={img.thumbnail || img.url}
+                            alt={img.title || img.tags || 'Image'}
+                            className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(img.url, '_blank')}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = img.url;
+                            }}
+                          />
+                          {img.title && (
+                            <div className="p-2 bg-gray-50 text-xs text-gray-600">
+                              {img.title}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
