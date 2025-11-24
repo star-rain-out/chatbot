@@ -6,14 +6,14 @@ import json
 import os
 from dotenv import load_dotenv
 import re
-
+import google.generativeai as genai
 # Load environment variables
 load_dotenv()
 
 router = APIRouter()
 
 class TravelQARequest(BaseModel):
-    user_input: str  # User's travel-related question
+    user_input: str = ""  # User's travel-related question
     text: str = ""  # Alternative field
     question: str = ""  # Original field
     history: list = []  # Chat history for context
@@ -288,6 +288,38 @@ async def call_anthropic_api(question: str, context: str = "") -> Dict[str, Any]
     except Exception as e:
         return await call_openai_api(question, context)
 
+async def call_gemini_api(question: str, context: str = "") -> Dict[str, Any]:
+    """
+    Call Google Gemini API (Free Tier available)
+    """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return await call_anthropic_api(question, context)
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-pro')
+        
+        system_instruction = "You are a knowledgeable and helpful travel assistant. Provide accurate, practical, and detailed travel advice."
+        if context:
+            prompt = f"{system_instruction}\n\nContext from previous conversation:\n{context}\n\nUser Question: {question}"
+        else:
+            prompt = f"{system_instruction}\n\nUser Question: {question}"
+
+        # Run in executor because genai library might be synchronous
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, lambda: model.generate_content(prompt))
+        
+        return {
+            "answer": response.text,
+            "confidence": 0.95,
+            "source": "Google Gemini"
+        }
+
+    except Exception as e:
+        print(f"Gemini API Error: {e}")
+        return await call_anthropic_api(question, context)
+
 @router.post("/ask")
 async def travel_qa(request: TravelQARequest):
     """
@@ -333,11 +365,15 @@ What would you like to know about your travel plans?"""
                 context_items.append(f"Previous answer: {msg.get('text', '')}")
         context = " | ".join(context_items)
 
-    # Try Anthropic first, fallback to OpenAI (which falls back to local KB)
+    # Try Gemini first (Free & Smart), then Anthropic, then OpenAI, then Fallback
     try:
-        result = await call_anthropic_api(question, context)
+        result = await call_gemini_api(question, context)
     except Exception as e:
-        result = await call_openai_api(question, context)
+        # Fallback chain
+        try:
+            result = await call_anthropic_api(question, context)
+        except:
+            result = await call_openai_api(question, context)
 
     # Format response with travel-specific styling
     formatted_answer = f"""🌍 **Travel Assistant**
@@ -366,5 +402,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Travel Q&A API",
-        "features": ["AI-powered travel advice", "Multi-LLM support", "Context awareness"]
+        "features": ["AI-powered travel advice", "Multi-LLM support", "Context awareness", "Google Gemini Integration"]
     }
