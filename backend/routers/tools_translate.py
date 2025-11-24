@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from googletrans import Translator
+from deep_translator import GoogleTranslator
+from langdetect import detect
 from gtts import gTTS
 import asyncio
 import io
@@ -11,13 +12,10 @@ router = APIRouter()
 class TranslateRequest(BaseModel):
     text: str
 
-# Initialize translator
-translator = Translator()
-
 @router.post("/do")
 async def translate_text(request: TranslateRequest):
     """
-    Translate text using Google Translate API via googletrans library.
+    Translate text using Google Translate API via deep-translator library.
     Automatically detects language and translates to the other (Chinese <-> English).
     """
     text = request.text.strip()
@@ -37,10 +35,6 @@ For example:
 
     try:
         # Detect language
-        # googletrans detection can be a bit slow, so we can try to infer from characters first for speed,
-        # but for accuracy let's let google handle it or just try to translate to English first, 
-        # if it's already English, translate to Chinese.
-        
         # A simple heuristic to decide target language:
         # If it contains Chinese characters, target is English.
         # Otherwise, target is Chinese (Simplified).
@@ -51,24 +45,31 @@ For example:
             target_lang = 'en'
             source_lang_name = 'Chinese'
             target_lang_name = 'English'
+            tts_lang = 'en'
         else:
-            target_lang = 'zh-cn'
+            target_lang = 'zh-CN' # deep-translator expects zh-CN for Simplified Chinese
             source_lang_name = 'English'
             target_lang_name = 'Chinese'
+            tts_lang = 'zh-cn' # gTTS expects zh-cn
 
         # Perform translation
-        # Run in executor because googletrans might be blocking
+        # Run in executor to avoid blocking main thread
         loop = asyncio.get_event_loop()
-        translation = await loop.run_in_executor(None, lambda: translator.translate(text, dest=target_lang))
         
-        translated_text = translation.text
+        def do_translate():
+            return GoogleTranslator(source='auto', target=target_lang).translate(text)
+
+        translated_text = await loop.run_in_executor(None, do_translate)
         
-        # Generate audio if target is Chinese
+        # Generate audio if target is Chinese (or we could do it for English too, but user asked for Chinese audio)
+        # The user specifically asked: "English translate to Chinese, then TTS to Chinese audio"
+        # So we prioritize Chinese TTS.
+        
         audio_base64 = None
-        if target_lang == 'zh-cn':
+        if target_lang == 'zh-CN':
             try:
                 # Create gTTS object
-                tts = gTTS(text=translated_text, lang='zh-cn')
+                tts = gTTS(text=translated_text, lang=tts_lang)
                 
                 # Save to memory buffer
                 mp3_fp = io.BytesIO()
@@ -95,7 +96,7 @@ For example:
             "bot_response": response_text,
             "original_text": text,
             "translated_text": translated_text,
-            "source_language": translation.src,
+            "source_language": "auto",
             "target_language": target_lang,
             "audio_base64": audio_base64
         }

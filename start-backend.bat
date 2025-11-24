@@ -1,4 +1,4 @@
 @echo off
 echo Starting Backend...
 cd backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --port 8000
