@@ -78,32 +78,37 @@ HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 HF_MODEL_ID = "Salesforce/blip-image-captioning-large"
 
 def caption_image_via_hf(image_bytes: bytes) -> Optional[str]:
-    """Call Hugging Face image captioning model to get a textual description.
-
-    Returns a caption string on success, or None on failure / when not configured.
-    """
+    """Call Hugging Face image captioning model to get a textual description."""
+    
+    # 1. 检查 Token 是否存在
     if not HF_API_TOKEN:
         print("DEBUG: HF_API_TOKEN is missing")
         return None
 
-    print(f"DEBUG: Starting HF captioning using InferenceClient. Model: {HF_MODEL_ID}")
+    print(f"DEBUG: Starting HF captioning. Model: {HF_MODEL_ID}")
 
     try:
+        # 2. 初始化 Client
         client = InferenceClient(token=HF_API_TOKEN)
         
-        # Convert bytes to PIL Image for the library (it handles bytes too, but PIL is safer)
+        # 3. 将图片字节流转换为 PIL Image 对象 (这是关键，Hugging Face 库对 PIL 支持最好)
         image = Image.open(io.BytesIO(image_bytes))
         
-        # The library handles retries and connection details automatically
-        # image_to_text returns a generated text string
+        # 4. 调用 image_to_text
+        # 注意：某些免费 API 端点可能处于 "Cold Boot" (冷启动) 状态，第一次调用会超时
         caption = client.image_to_text(image, model=HF_MODEL_ID)
         
-        print(f"DEBUG: HF Response Data: {caption}")
+        print(f"DEBUG: HF Success! Caption: {caption}")
         return caption
 
     except Exception as e:
-        print(f"DEBUG: Exception in caption_image_via_hf: {str(e)}")
-        # Any error -> let caller fall back to local mock logic
+        # 5. 打印详细的错误信息以便调试
+        print(f"DEBUG: Error details: {type(e).__name__}: {str(e)}")
+        
+        # 特殊情况处理：如果模型还在加载中 (Model is loading)
+        if "503" in str(e) or "loading" in str(e).lower():
+            print("DEBUG: Model is currently loading on Hugging Face servers.")
+        
         return None
 
 
