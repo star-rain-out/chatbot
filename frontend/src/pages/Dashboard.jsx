@@ -5,7 +5,18 @@ import axios from 'axios';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userAvatar, setUserAvatar] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: '',
+    email: '',
+    phone_number: '',
+    password: '',
+    avatar_url: ''
+  });
 
   useEffect(() => {
     // Get username from localStorage or verify token
@@ -15,7 +26,8 @@ const Dashboard = () => {
     if (token) {
       if (savedUserName) {
         setUserName(savedUserName);
-        setLoading(false);
+        // Attempt to fetch full user info even if name is saved, to get email/avatar
+        fetchUserInfo();
       } else {
         // If no saved username, fetch from API
         fetchUserInfo();
@@ -34,6 +46,15 @@ const Dashboard = () => {
         }
       });
       setUserName(response.data.name);
+      setUserEmail(response.data.email);
+      setUserAvatar(response.data.avatar_url);
+      setProfileData({
+        name: response.data.name,
+        email: response.data.email,
+        phone_number: response.data.phone_number || '',
+        password: '',
+        avatar_url: response.data.avatar_url || ''
+      });
       localStorage.setItem('user_name', response.data.name);
     } catch (error) {
       console.error('Failed to fetch user info:', error);
@@ -50,6 +71,62 @@ const Dashboard = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user_name');
     navigate('/auth');
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const updateData = {
+        name: profileData.name,
+        phone_number: profileData.phone_number
+      };
+
+      if (profileData.password) {
+        updateData.password = profileData.password;
+      }
+
+      const response = await axios.put('http://localhost:8000/api/auth/me', updateData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      setUserName(response.data.user.name);
+      setUserEmail(response.data.user.email);
+      setUserAvatar(response.data.user.avatar_url);
+      setProfileData(prev => ({ ...prev, password: '', name: response.data.user.name, avatar_url: response.data.user.avatar_url }));
+      localStorage.setItem('user_name', response.data.user.name);
+      alert('Profile updated successfully!');
+      setShowProfileModal(false);
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      alert('Failed to update profile.');
+    }
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post('http://localhost:8000/api/auth/upload_avatar', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setUserAvatar(response.data.avatar_url);
+      setProfileData(prev => ({ ...prev, avatar_url: response.data.avatar_url }));
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      alert('Failed to upload avatar.');
+    }
   };
 
   // Define all features with ID (for routing) and display names
@@ -137,6 +214,12 @@ const Dashboard = () => {
       name: '🛡️ Travel Insurance',
       desc: 'Get travel insurance recommendations',
       color: 'from-teal-500 to-teal-700'
+    },
+    {
+      id: 'ticket_recognition',
+      name: '🎫 Ticket Recognition',
+      desc: 'Extract info from PDF tickets',
+      color: 'from-orange-500 to-red-600'
     }
   ];
 
@@ -155,17 +238,50 @@ const Dashboard = () => {
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <span className="text-3xl">🇨🇳</span>
               China Travel Assistant
             </h1>
             <p className="text-gray-600 text-sm mt-1">Hello, {userName}! Choose a feature to start your China journey</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            Sign Out
-          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 focus:outline-none"
+            >
+              {userAvatar ? (
+                <img src={userAvatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
+              ) : (
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </button>
+
+            {/* Dropdown Menu */}
+            {showUserMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-2 z-20 border border-gray-100">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <p className="font-semibold text-gray-800 truncate">{userName}</p>
+                  <p className="text-xs text-gray-500 truncate">{userEmail}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setShowProfileModal(true);
+                  }}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                >
+                  <span>✏️</span> Edit Profile
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                >
+                  <span>🚪</span> Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -218,6 +334,100 @@ const Dashboard = () => {
           <p>💡 Click on any feature card to start a conversation and plan your China journey</p>
         </div>
       </div>
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 text-white flex justify-between items-center">
+              <h3 className="text-xl font-bold">Edit Profile</h3>
+              <button onClick={() => setShowProfileModal(false)} className="text-white/80 hover:text-white text-2xl">&times;</button>
+            </div>
+
+            <div className="p-6 max-h-[80vh] overflow-y-auto">
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative group cursor-pointer">
+                  {profileData.avatar_url ? (
+                    <img src={profileData.avatar_url} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg" />
+                  ) : (
+                    <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 text-3xl border-4 border-white shadow-lg">
+                      📷
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-white text-sm font-semibold">Change</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">Click to upload new avatar</p>
+              </div>
+
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={profileData.name}
+                    onChange={e => setProfileData({ ...profileData, name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={profileData.email}
+                    disabled
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-500 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={profileData.phone_number}
+                    onChange={e => setProfileData({ ...profileData, phone_number: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={profileData.password}
+                    onChange={e => setProfileData({ ...profileData, password: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Leave blank to keep current"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

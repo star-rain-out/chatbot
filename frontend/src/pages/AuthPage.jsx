@@ -17,6 +17,7 @@ const AuthPage = () => {
     const name = formData.get('name');
     const email = formData.get('email');
     const password = formData.get('password');
+    const phone_number = formData.get('phone_number');
 
     try {
       const apiUrl = isLogin
@@ -25,7 +26,7 @@ const AuthPage = () => {
 
       const requestData = isLogin
         ? { email, password }
-        : { name, email, password };
+        : { name, email, password, phone_number };
 
       const response = await axios.post(apiUrl, requestData);
 
@@ -69,6 +70,14 @@ const AuthPage = () => {
               required
             />
           )}
+          {!isLogin && (
+            <input
+              name="phone_number"
+              type="tel"
+              placeholder="Phone Number (Optional)"
+              className="w-full border p-2 rounded"
+            />
+          )}
           <input
             name="email"
             type="email"
@@ -94,7 +103,7 @@ const AuthPage = () => {
         </form>
 
         <p className="mt-4 text-center text-sm text-blue-600 cursor-pointer"
-           onClick={() => setIsLogin(!isLogin)}>
+          onClick={() => setIsLogin(!isLogin)}>
           {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
         </p>
       </div>

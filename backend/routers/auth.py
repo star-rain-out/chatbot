@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from passlib.context import CryptContext
@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict
 import json
 import os
+import shutil
 
 # Create router object
 router = APIRouter()
@@ -28,10 +29,18 @@ class UserRegister(BaseModel):
     name: str
     email: str
     password: str
+    phone_number: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    phone_number: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -124,6 +133,8 @@ async def register(user: UserRegister):
         "name": user.name,
         "email": user.email,
         "hashed_password": hashed_password,
+        "phone_number": user.phone_number,
+        "avatar_url": None,
         "created_at": datetime.utcnow().isoformat()
     }
 
@@ -169,5 +180,67 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
     return {
         "email": current_user["email"],
         "name": current_user["name"],
+        "phone_number": current_user.get("phone_number"),
+        "avatar_url": current_user.get("avatar_url"),
         "created_at": current_user["created_at"]
     }
+
+@router.put("/me")
+async def update_profile(user_update: UserUpdate, current_user: dict = Depends(get_current_user)):
+    """Update user profile"""
+    users = load_users()
+    user_email = current_user["email"]
+    
+    if user_email not in users:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update fields
+    if user_update.name:
+        users[user_email]["name"] = user_update.name
+    if user_update.phone_number:
+        users[user_email]["phone_number"] = user_update.phone_number
+    if user_update.avatar_url:
+        users[user_email]["avatar_url"] = user_update.avatar_url
+    if user_update.password:
+        users[user_email]["hashed_password"] = get_password_hash(user_update.password)
+        
+    save_users(users)
+    
+    return {
+        "message": "Profile updated successfully",
+        "user": {
+            "name": users[user_email]["name"],
+            "email": user_email,
+            "phone_number": users[user_email].get("phone_number"),
+            "avatar_url": users[user_email].get("avatar_url")
+        }
+    }
+
+@router.post("/upload_avatar")
+async def upload_avatar(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload user avatar"""
+    try:
+        # Create directory if not exists
+        os.makedirs("static/avatars", exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        filename = f"avatar_{current_user['email']}{file_extension}"
+        file_path = f"static/avatars/{filename}"
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Return URL
+        avatar_url = f"http://localhost:8000/static/avatars/{filename}"
+        
+        # Update user profile with new avatar URL
+        users = load_users()
+        if current_user["email"] in users:
+            users[current_user["email"]]["avatar_url"] = avatar_url
+            save_users(users)
+            
+        return {"avatar_url": avatar_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

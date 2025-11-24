@@ -2,7 +2,9 @@
   "123@123.com": {
     "name": "Bruce",
     "email": "123@123.com",
-    "hashed_password": "$2b$12$M.ga2lj2zwq4yQ0TGohpUuH2dS9cSRGS5hSIRZHFqzvqJSKG88afi",
-    "created_at": "2025-11-22T14:07:17.121658"
+    "hashed_password": "$2b$12$6od01e/BcvM6lIrfRvNOre164skG/8XAt3kRoA59ZQyqKMiLVK5Z2",
+    "created_at": "2025-11-22T14:07:17.121658",
+    "avatar_url": "http://localhost:8000/static/avatars/avatar_123@123.com.png",
+    "phone_number": "12312312123"
   }
 }

@@ -6,8 +6,16 @@ from routers import (
     tools_travel, tools_landmark, tools_social_media, tools_timezone,
     tools_attraction_tickets, tools_hotel_booking, tools_transport_route,
     tools_china_experience, tools_visa_info, tools_travel_insurance,
-    tools_budget_estimator
-)  
+    tools_budget_estimator,
+    tools_ticket_recognition
+)
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Create static directory if it doesn't exist
+if not os.path.exists("static/avatars"):
+    os.makedirs("static/avatars")
+
   
 app = FastAPI()  
   
@@ -38,8 +46,13 @@ app.include_router(tools_transport_route.router, prefix="/api/transport_route", 
 app.include_router(tools_china_experience.router, prefix="/api/china_experience", tags=["China Experience"])
 app.include_router(tools_visa_info.router, prefix="/api/visa_info", tags=["Visa Information"])
 app.include_router(tools_travel_insurance.router, prefix="/api/travel_insurance", tags=["Travel Insurance"])
-app.include_router(tools_budget_estimator.router, prefix="/api/budget_estimator", tags=["Budget Estimator"])  
+app.include_router(tools_budget_estimator.router, prefix="/api/budget_estimator", tags=["Budget Estimator"])
+app.include_router(tools_ticket_recognition.router, prefix="/api/ticket_recognition", tags=["Ticket Recognition"])
   
 @app.get("/")  
 def root():  
-    return {"message": "Backend is running"}  
+    return {"message": "Backend is running"}
+    # Trigger reload
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")

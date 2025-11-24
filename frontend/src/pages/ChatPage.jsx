@@ -12,6 +12,7 @@ const ChatPage = () => {
   const [selectedPlatform, setSelectedPlatform] = useState('general');
   const [selectedTone, setSelectedTone] = useState('friendly');
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -22,7 +23,6 @@ const ChatPage = () => {
   }, [messages]);
 
   // 根据 featureId 映射到不同的后端 API URL
-  // 🟩 核心逻辑：绝对独立的接口映射
   const getApiEndpoint = () => {
     switch (featureId) {
       case 'weather': return 'http://localhost:8000/api/weather/query';
@@ -40,6 +40,7 @@ const ChatPage = () => {
       case 'visa_info': return 'http://localhost:8000/api/visa_info/query';
       case 'travel_insurance': return 'http://localhost:8000/api/travel_insurance/recommend';
       case 'budget_estimator': return 'http://localhost:8000/api/budget_estimator/estimate';
+      case 'ticket_recognition': return 'http://localhost:8000/api/ticket_recognition/upload';
       default: return null;
     }
   };
@@ -134,6 +135,12 @@ const ChatPage = () => {
           placeholder: 'Enter destination, duration, and travel style...',
           welcomeMessage: 'Welcome to Travel Budget Estimator! I can help you estimate comprehensive travel costs for China, including accommodation, food, transportation, activities, and more. Just tell me your destination, duration, travel style, group size, and I\'ll provide a detailed budget breakdown!'
         };
+      case 'ticket_recognition':
+        return {
+          title: '🎫 Ticket Recognition',
+          placeholder: 'Upload a PDF ticket to extract information...',
+          welcomeMessage: 'Welcome to Ticket Recognition! Please upload a PDF file of your itinerary ticket, and I will extract the key information for you.'
+        };
       default:
         return {
           title: '🇨🇳 China Travel Assistant',
@@ -172,7 +179,52 @@ const ChatPage = () => {
       return;
     }
 
+    // Handle ticket recognition mode separately
+    if (featureId === 'ticket_recognition') {
+      if (selectedFile) {
+        // Handle PDF upload for ticket recognition
+        const formData = new FormData();
+        formData.append('file', selectedFile);
 
+        try {
+          // Show typing status
+          setMessages(prev => [...prev, { sender: 'bot', text: 'Processing ticket...', isTyping: true }]);
+
+          const res = await axios.post('http://localhost:8000/api/ticket_recognition/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+
+          setMessages(prev => prev.filter(msg => !msg.isTyping));
+
+          const extractedInfo = res.data;
+          const responseText = `
+**Ticket Information Extracted:**
+- **Origin:** ${extractedInfo.origin}
+- **Destination:** ${extractedInfo.destination}
+- **Date:** ${extractedInfo.date}
+- **Ticket Number:** ${extractedInfo.ticket_number}
+
+**Raw Text:**
+${extractedInfo.raw_text.substring(0, 200)}...
+                `;
+
+          const botMsg = {
+            sender: 'bot',
+            text: responseText
+          };
+          setMessages(prev => [...prev, botMsg]);
+        } catch (error) {
+          console.error('Error uploading ticket:', error);
+          setMessages(prev => prev.filter(msg => !msg.isTyping));
+          setMessages(prev => [...prev, {
+            sender: 'bot',
+            text: 'Sorry, I failed to process the ticket. Please try again.'
+          }]);
+        }
+        setSelectedFile(null);
+      }
+      return;
+    }
 
     if (!input.trim()) return;
 
@@ -423,10 +475,18 @@ const ChatPage = () => {
 
 
   // File input handler
-  // File input handler
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
+    if (featureId === 'ticket_recognition') {
+      if (file && file.type === 'application/pdf') {
+        setSelectedFile(file);
+        // Auto send for ticket recognition
+        // Note: We can't call sendMessage directly here because state update is async
+        // We'll rely on the user clicking send or we could use useEffect to watch selectedFile
+      } else {
+        alert('Please select a valid PDF file.');
+      }
+    } else if (file && file.type.startsWith('image/')) {
       setSelectedFile(file);
     } else {
       alert('Please select a valid image file.');
@@ -662,6 +722,41 @@ const ChatPage = () => {
               </div>
             </div>
 
+          ) : featureId === 'ticket_recognition' ? (
+            // Ticket Recognition mode special UI
+            <div className="space-y-3">
+              {/* File upload area */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="ticket-upload"
+                />
+                <label htmlFor="ticket-upload" className="cursor-pointer">
+                  <div className="space-y-2">
+                    <div className="text-4xl">📄</div>
+                    <p className="text-sm text-gray-600">
+                      {selectedFile ? `Selected: ${selectedFile.name}` : 'Click to upload a PDF ticket'}
+                    </p>
+                    <p className="text-xs text-gray-400">PDF files only</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Send button */}
+              <div className="flex gap-3 items-center">
+                <button
+                  onClick={sendMessage}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-6 py-3 rounded-full transition-colors flex items-center justify-center gap-2"
+                  disabled={!selectedFile}
+                >
+                  <span>Process Ticket</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
           ) : (
             // Regular input for other features
             <div className="flex gap-3 items-center">
