@@ -294,8 +294,8 @@ async def call_gemini_api(question: str, context: str = "") -> Dict[str, Any]:
     """
     Call Google Gemini API (Free Tier available)
     """
-    #api_key = os.getenv("GOOGLE_API_KEY")
-    api_key = "AIzaSyD2pjtUjPBXrhHYwNwP-bdUmsRW-Od8eLA"
+    api_key = os.getenv("GOOGLE_API_KEY")
+    #api_key = "AIzaSyD2pjtUjPBXrhHYwNwP-bdUmsRW-Od8eLA"
     if not api_key:
         return await call_anthropic_api(question, context)
 
