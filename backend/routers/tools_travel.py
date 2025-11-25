@@ -6,7 +6,9 @@ import json
 import os
 from dotenv import load_dotenv
 import re
+import asyncio
 import google.generativeai as genai
+
 # Load environment variables
 load_dotenv()
 
@@ -292,15 +294,33 @@ async def call_gemini_api(question: str, context: str = "") -> Dict[str, Any]:
     """
     Call Google Gemini API (Free Tier available)
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    #api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = "AIzaSyD2pjtUjPBXrhHYwNwP-bdUmsRW-Od8eLA"
     if not api_key:
         return await call_anthropic_api(question, context)
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        # Use a newer model that is likely to be available
+        model = genai.GenerativeModel('gemini-pro-latest')
         
-        system_instruction = "You are a knowledgeable and helpful travel assistant. Provide accurate, practical, and detailed travel advice."
+        system_instruction = """You are an expert AI Travel Assistant. Your goal is to provide comprehensive, inspiring, and practical travel advice.
+
+        When answering questions:
+        1.  **Be Structured**: Use Markdown headers (###), bullet points, and bold text to organize information.
+        2.  **Be Engaging**: Use emojis to make the response lively (e.g., ✈️, 🍜, 🏨).
+        3.  **Be Specific**: Provide concrete names of places, dishes, or transport methods.
+        4.  **Cover Key Aspects**:
+            *   **Attractions**: Must-see spots with brief descriptions.
+            *   **Food**: Local delicacies and restaurant recommendations.
+            *   **Logistics**: Best transport options and practical tips.
+            *   **Hidden Gems**: Mention off-the-beaten-path locations if relevant.
+
+        If asked for an itinerary, provide a day-by-day breakdown.
+        If asked about a specific place, provide a mini-guide.
+        If you don't know something, suggest related alternatives.
+        """
+
         if context:
             prompt = f"{system_instruction}\n\nContext from previous conversation:\n{context}\n\nUser Question: {question}"
         else:
@@ -310,6 +330,9 @@ async def call_gemini_api(question: str, context: str = "") -> Dict[str, Any]:
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(None, lambda: model.generate_content(prompt))
         
+        if not response.text:
+             raise ValueError("Empty response from Gemini")
+
         return {
             "answer": response.text,
             "confidence": 0.95,
@@ -318,6 +341,7 @@ async def call_gemini_api(question: str, context: str = "") -> Dict[str, Any]:
 
     except Exception as e:
         print(f"Gemini API Error: {e}")
+        # Fallback to Anthropic if Gemini fails
         return await call_anthropic_api(question, context)
 
 @router.post("/ask")

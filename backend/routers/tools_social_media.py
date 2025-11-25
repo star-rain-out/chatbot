@@ -9,9 +9,8 @@ import requests
 import uuid
 import os
 import random
-from huggingface_hub import InferenceClient
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import tempfile
+from serpapi import GoogleSearch
 
 router = APIRouter()
 
@@ -20,6 +19,9 @@ class SocialMediaRequest(BaseModel):
     platform: Optional[str] = "general"
     tone: Optional[str] = "friendly"
     hashtags_count: Optional[int] = 5
+
+# SerpApi Configuration
+SERPAPI_KEY = "416c3f455698c1a4f445e5afc78980a9ed90428e700aae4cc25f18e0c0b9377d"
 
 # Multiple mock scenarios for variety
 MOCK_SCENARIOS = [
@@ -73,86 +75,77 @@ MOCK_SCENARIOS = [
     }
 ]
 
-# Optional: Hugging Face image captioning integration
-# If you set HF_API_TOKEN, the service will call a real image captioning model.
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-# Default model if not specified
-HF_MODEL_ID = "Salesforce/blip-image-captioning-large"
-
-API_URL = "https://router.huggingface.co/hf-inference/models/nlpconnect/vit-gpt2-image-captioning"
-
-PROXY_URL = "http://127.0.0.1:1080"
-def caption_image_via_hf(image_bytes: bytes):
-    if not HF_API_TOKEN:
-        print("DEBUG: 缺少 HF_API_TOKEN")
+def analyze_image_via_serpapi(image_bytes: bytes) -> Optional[str]:
+    """
+    Analyze image using SerpApi Google Reverse Image Search.
+    Returns a description (best guess) of the image.
+    """
+    if not SERPAPI_KEY:
+        print("DEBUG: Missing SERPAPI_KEY")
         return None
 
-    # 保持重试机制，防止 IncompleteRead
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[500, 502, 503, 504],
-        allowed_methods=["POST"]
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-
-    headers = {
-        "Authorization": f"Bearer {HF_API_TOKEN}"
-    }
-    
-    proxies = {
-        "http": PROXY_URL,
-        "https": PROXY_URL
-    }
-
-    print(f"DEBUG: 正在请求新版 Router 接口: {API_URL}")
-
     try:
-        response = session.post(
-            API_URL, 
-            headers=headers, 
-            data=image_bytes, 
-            proxies=proxies,
-            timeout=60, 
-            stream=True 
-        )
+        # Upload to tmpfiles.org to get a public URL
+        # SerpApi requires a public URL for google_reverse_image
+        print("DEBUG: Uploading image to tmpfiles.org...")
+        files = {'file': ('image.jpg', image_bytes, 'image/jpeg')}
+        upload_response = requests.post('https://tmpfiles.org/api/v1/upload', files=files)
         
-        print(f"DEBUG: 状态码: {response.status_code}")
-
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                caption = result[0].get("generated_text")
-                print(f"DEBUG: ✅ 成功获取描述: {caption}")
-                return caption
+        image_url = None
+        if upload_response.status_code == 200:
+            result = upload_response.json()
+            if result.get('status') == 'success':
+                url = result['data']['url']
+                # Convert to direct download URL
+                image_url = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/')
+                print(f"DEBUG: Image uploaded to: {image_url}")
             else:
-                print(f"DEBUG: 返回格式异常: {result}")
-                return None
-        
-        elif response.status_code == 503:
-            print("DEBUG: ⚠️ 模型正在启动中 (Model Loading)... 请等待 30 秒后再试。")
-            return None
-        
-        # 如果还是 404，那真的就是此时此刻这个模型炸了
-        elif response.status_code == 404:
-             print("DEBUG: ❌ 404 Not Found. 尝试切换备用模型...")
-             return None
-            
+                print(f"DEBUG: tmpfiles.org upload failed: {result}")
         else:
-            print(f"DEBUG: ❌ 请求失败，状态码 {response.status_code}")
-            # 尝试打印前 100 个字符看看是不是又是 HTML
-            print(f"DEBUG: 响应内容: {response.text[:200]}")
+            print(f"DEBUG: tmpfiles.org HTTP Error: {upload_response.status_code}")
+
+        if not image_url:
+            print("DEBUG: Failed to get public URL for image. Skipping SerpApi.")
+            return None
+
+        print(f"DEBUG: Analyzing image via SerpApi: {image_url}")
+
+        params = {
+            "engine": "google_reverse_image",
+            "image_url": image_url,
+            "api_key": SERPAPI_KEY
+        }
+
+        search = GoogleSearch(params)
+        results = search.get_dict()
+
+        # Extract "best guess" or knowledge graph title
+        description = None
+        
+        # 1. Try "image_results" -> "search_information" -> "query_displayed" (sometimes contains the guess)
+        if "search_information" in results and "query_displayed" in results["search_information"]:
+             description = results["search_information"]["query_displayed"]
+        
+        # 2. Try Knowledge Graph title
+        if not description and "knowledge_graph" in results:
+            description = results["knowledge_graph"].get("title")
+            
+        # 3. Try Inline Images title or similar
+        if not description and "inline_images" in results:
+             # Sometimes inline images have a title related to the search
+             pass
+
+        if description:
+            print(f"DEBUG: ✅ SerpApi Analysis Success: {description}")
+            return description
+        else:
+            print("DEBUG: ❌ SerpApi returned no clear description.")
+            # print(f"DEBUG: Full response keys: {results.keys()}")
             return None
 
     except Exception as e:
-        print(f"DEBUG: 发生错误: {e}")
+        print(f"DEBUG: SerpApi Error: {e}")
         return None
-    finally:
-        session.close()
-
 
 def build_analysis_from_caption(caption: str) -> dict:
     """Build an analysis dict compatible with generate_social_media_caption
@@ -167,27 +160,25 @@ def build_analysis_from_caption(caption: str) -> dict:
         "mood": "beautiful, amazing",
         "location_type": "scene",
         "activities": [],
-        "source": "huggingface"
+        "source": "serpapi"
     }
-
 
 def analyze_image_with_base64(base64_image: str) -> dict:
     """Analyze image content.
 
     Priority:
-    1. Try real image captioning via Hugging Face Inference API (if configured)
+    1. Try real image analysis via SerpApi (Google Reverse Image Search)
        to get a textual description from the actual image contents.
-    2. If that fails or is not configured, fall back to the existing
-       heuristic + mock scenarios.
+    2. If that fails, fall back to the existing heuristic + mock scenarios.
     """
     try:
         # Decode image bytes
         img_data = base64.b64decode(base64_image)
 
-        # 1) Try real captioning via Hugging Face (if configured)
-        caption = caption_image_via_hf(img_data)
-        if caption:
-            return build_analysis_from_caption(caption)
+        # 1) Try real analysis via SerpApi
+        description = analyze_image_via_serpapi(img_data)
+        if description:
+            return build_analysis_from_caption(description)
 
         # 2) Fallback: local heuristic using color distribution
         img = Image.open(io.BytesIO(img_data))
@@ -195,7 +186,7 @@ def analyze_image_with_base64(base64_image: str) -> dict:
         # Simple heuristic: choose scenario based on image dimensions and average color
         width, height = img.size
         aspect_ratio = width / height if height > 0 else 1.0
-
+        
         # Get average color to help choose scenario
         img_small = img.resize((10, 10))
         pixels = list(img_small.getdata())
@@ -324,7 +315,8 @@ def generate_social_media_caption(analysis: dict, platform: str = "general", ton
         "analysis_summary": {
             "main_objects": objects[:3],
             "mood": mood,
-            "location_type": location_type
+            "location_type": location_type,
+            "source": analysis.get("source", "local")
         }
     }
 
@@ -347,7 +339,7 @@ async def generate_social_media_caption_from_image(
 Upload an image and I'll generate perfect captions for your social media posts!
 
 **Features:**
-• 🎯 Smart content analysis
+• 🎯 Smart content analysis (Powered by Google Reverse Image Search)
 • ✍️ Platform-specific captions (WeChat, Weibo, Instagram, Twitter)
 • 🎭 Multiple tone styles
 • 🏷️ Auto-generated hashtags
@@ -434,12 +426,13 @@ Upload an image to get started! ✨""",
 • Main elements: {', '.join(result['analysis_summary']['main_objects'])}
 • Mood: {result['analysis_summary']['mood']}
 • Scene: {result['analysis_summary']['location_type']}
+• Source: {result['analysis_summary'].get('source', 'local')}
 
 ✨ Copy and paste to use! You can adjust the caption as needed."""
 
-        # Check if Hugging Face was used and prepend success message
-        if result['analysis_summary'].get('source') == 'huggingface':
-            response_text = "hugging face return succussful:\n\n" + response_text
+        # Check if SerpApi was used and prepend success message
+        if result['analysis_summary'].get('source') == 'serpapi':
+            response_text = "✅ SerpApi (Google Reverse Image) Analysis Successful:\n\n" + response_text
 
         return {
             "bot_response": response_text,
@@ -466,7 +459,7 @@ async def get_social_media_generator_info():
 AI-powered tool to create engaging social media captions!
 
 🎯 **Features**:
-• Smart image analysis
+• Smart image analysis (Google Reverse Image Search)
 • Platform-specific formatting
 • Multiple tone options
 • Auto-generated hashtags

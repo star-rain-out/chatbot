@@ -11,6 +11,8 @@ from PIL import Image
 import uuid
 import tempfile
 import random
+import requests
+from serpapi import GoogleSearch
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +24,9 @@ class LandmarkRecognitionRequest(BaseModel):
 
 class LandmarkRecognitionResponse(BaseModel):
     result: str
+
+# SerpApi Configuration
+SERPAPI_KEY = "416c3f455698c1a4f445e5afc78980a9ed90428e700aae4cc25f18e0c0b9377d"
 
 # Enhanced landmark database with keywords for smart simulation
 LANDMARK_DATABASE = {
@@ -153,91 +158,75 @@ LANDMARK_DATABASE = {
     }
 }
 
-async def call_vision_api(image_data: bytes) -> Dict[str, Any]:
+def analyze_image_via_serpapi(image_bytes: bytes) -> Dict[str, Any]:
     """
-    Call computer vision API for landmark recognition
+    Analyze image using SerpApi Google Reverse Image Search.
+    Returns a dict with landmark name and confidence if found.
     """
-    # Check for available API keys
-    baidu_key = os.getenv("BAIDU_API_KEY")
-    google_key = os.getenv("GOOGLE_VISION_API_KEY")
-    azure_key = os.getenv("AZURE_VISION_KEY")
-
-    if not (baidu_key or google_key or azure_key):
-        # No API key found, return None to trigger smart simulation
+    if not SERPAPI_KEY:
+        print("DEBUG: Missing SERPAPI_KEY")
         return None
 
     try:
-        # Baidu AI implementation (Preferred for China region)
-        if baidu_key and os.getenv("BAIDU_SECRET_KEY"):
-            return await call_baidu_vision(image_data)
+        # Upload to tmpfiles.org to get a public URL
+        print("DEBUG: Uploading image to tmpfiles.org...")
+        files = {'file': ('image.jpg', image_bytes, 'image/jpeg')}
+        upload_response = requests.post('https://tmpfiles.org/api/v1/upload', files=files)
+        
+        image_url = None
+        if upload_response.status_code == 200:
+            result = upload_response.json()
+            if result.get('status') == 'success':
+                url = result['data']['url']
+                # Convert to direct download URL
+                image_url = url.replace('tmpfiles.org/', 'tmpfiles.org/dl/')
+                print(f"DEBUG: Image uploaded to: {image_url}")
+            else:
+                print(f"DEBUG: tmpfiles.org upload failed: {result}")
+        else:
+            print(f"DEBUG: tmpfiles.org HTTP Error: {upload_response.status_code}")
 
-        # Google Vision API implementation
-        elif google_key:
-            return await call_google_vision(image_data)
+        if not image_url:
+            print("DEBUG: Failed to get public URL for image. Skipping SerpApi.")
+            return None
 
-        # Azure Computer Vision implementation
-        elif azure_key:
-            # Placeholder for Azure implementation
+        print(f"DEBUG: Analyzing image via SerpApi: {image_url}")
+
+        params = {
+            "engine": "google_reverse_image",
+            "image_url": image_url,
+            "api_key": SERPAPI_KEY
+        }
+
+        search = GoogleSearch(params)
+        results = search.get_dict()
+
+        # Extract "best guess" or knowledge graph title
+        landmark_name = None
+        
+        # 1. Try Knowledge Graph title (most reliable for landmarks)
+        if "knowledge_graph" in results:
+            landmark_name = results["knowledge_graph"].get("title")
+            
+        # 2. Try "image_results" -> "search_information" -> "query_displayed"
+        if not landmark_name and "search_information" in results and "query_displayed" in results["search_information"]:
+             landmark_name = results["search_information"]["query_displayed"]
+
+        if landmark_name:
+            print(f"DEBUG: ✅ SerpApi Analysis Success: {landmark_name}")
+            return {
+                "landmark": landmark_name,
+                "confidence": 0.95, # High confidence for Google Search
+                "simulated": False,
+                "source": "serpapi"
+            }
+        else:
+            print("DEBUG: ❌ SerpApi returned no clear landmark description.")
             return None
 
     except Exception as e:
-        print(f"API Error: {e}")
+        print(f"DEBUG: SerpApi Error: {e}")
         return None
-
-async def get_baidu_access_token() -> str:
-    """
-    Get Access Token for Baidu AI
-    """
-    api_key = os.getenv("BAIDU_API_KEY")
-    secret_key = os.getenv("BAIDU_SECRET_KEY")
-    
-    url = "https://aip.baidubce.com/oauth/2.0/token"
-    params = {
-        "grant_type": "client_credentials",
-        "client_id": api_key,
-        "client_secret": secret_key
-    }
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(url, params=params)
-        response.raise_for_status()
-        return response.json().get("access_token")
-
-async def call_baidu_vision(image_data: bytes) -> Dict[str, Any]:
-    """
-    Call Baidu AI Landmark Recognition API
-    """
-    try:
-        access_token = await get_baidu_access_token()
-        if not access_token:
-            return None
-            
-        url = f"https://aip.baidubce.com/rest/2.0/image-classify/v1/landmark?access_token={access_token}"
-        
-        # Baidu expects base64 encoded image
-        image_b64 = base64.b64encode(image_data).decode()
-        
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        data = {"image": image_b64}
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers, data=data)
-            response.raise_for_status()
-            result = response.json()
-            
-            if result.get("result") and result["result"].get("landmark"):
-                landmark_name = result["result"]["landmark"]
-                return {
-                    "landmark": landmark_name,
-                    "confidence": 0.9,
-                    "simulated": False,
-                    "source": "baidu"
-                }
-    except Exception as e:
-        print(f"Baidu API Error: {e}")
-        return None
-    
-    return None
 
 async def smart_simulate_landmark_recognition(filename: str) -> Dict[str, Any]:
     """
@@ -265,52 +254,6 @@ async def smart_simulate_landmark_recognition(filename: str) -> Dict[str, Any]:
         "simulated": True,
         "is_random": True
     }
-
-async def call_google_vision(image_data: bytes) -> Dict[str, Any]:
-    """
-    Call Google Cloud Vision API for landmark detection
-    """
-    api_key = os.getenv("GOOGLE_VISION_API_KEY")
-    if not api_key:
-        return None
-
-    # Convert image to base64
-    image_b64 = base64.b64encode(image_data).decode()
-
-    request_data = {
-        "requests": [
-            {
-                "image": {
-                    "content": image_b64
-                },
-                "features": [
-                    {
-                        "type": "LANDMARK_DETECTION",
-                        "maxResults": 3
-                    }
-                ]
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"https://vision.googleapis.com/v1/images:annotate?key={api_key}",
-            json=request_data
-        )
-        response.raise_for_status()
-        result = response.json()
-
-        if result.get("responses") and result["responses"][0].get("landmarkAnnotations"):
-            landmark = result["responses"][0]["landmarkAnnotations"][0]
-            return {
-                "landmark": landmark.get("description", "").lower().replace(" ", "_"),
-                "confidence": landmark.get("score", 0.5),
-                "simulated": False,
-                "source": "google"
-            }
-
-    return None
 
 def preprocess_image(image_data: bytes) -> bytes:
     """
@@ -354,10 +297,10 @@ async def recognize_landmark(image: UploadFile = File(...)):
         image_data = await image.read()
         processed_image = preprocess_image(image_data)
 
-        # Try to call real Vision API first
-        recognition_result = await call_vision_api(processed_image)
+        # Try to call real Vision API first (SerpApi)
+        recognition_result = analyze_image_via_serpapi(processed_image)
 
-        # If API failed or no key, use smart simulation
+        # If API failed, use smart simulation
         if not recognition_result:
             recognition_result = await smart_simulate_landmark_recognition(image.filename)
 
@@ -365,6 +308,7 @@ async def recognize_landmark(image: UploadFile = File(...)):
         confidence = recognition_result.get("confidence", 0.0)
         is_simulated = recognition_result.get("simulated", False)
         is_random = recognition_result.get("is_random", False)
+        source = recognition_result.get("source", "simulation")
 
         # Get landmark information from database
         # Try exact match first, then fuzzy match
@@ -373,17 +317,24 @@ async def recognize_landmark(image: UploadFile = File(...)):
         if not landmark_info:
             # Try to find by name if key doesn't match
             for key, data in LANDMARK_DATABASE.items():
-                if key in landmark_key or landmark_key in key:
+                if key in landmark_key.lower() or landmark_key.lower() in key:
+                    landmark_info = data
+                    break
+                    
+        # Also check keywords in DB against the landmark name from SerpApi
+        if not landmark_info:
+             for key, data in LANDMARK_DATABASE.items():
+                if any(k in landmark_key.lower() for k in data.get("keywords", [])):
                     landmark_info = data
                     break
 
         if not landmark_info:
-            # If we have a name from Baidu but no info in DB, show generic info with the name
+            # If we have a name from SerpApi but no info in DB, show generic info with the name
             if landmark_key and not is_simulated:
                  return {
                     "result": f"""🏛️ **{landmark_key}**
 
-📍 **Location:** China (Identified by AI)
+📍 **Location:** Identified by Google Search
 
 🎯 **Confidence:** {confidence:.1%}
 
@@ -415,11 +366,11 @@ I couldn't identify this landmark with confidence. Please try with:
         simulation_note = ""
         if is_simulated:
             if is_random:
-                simulation_note = "\n\n*(Note: Running in demo mode. Random landmark selected because no API key was found and filename didn't match known landmarks.)*"
+                simulation_note = "\n\n*(Note: Running in demo mode. Random landmark selected because SerpApi failed and filename didn't match known landmarks.)*"
             else:
-                simulation_note = "\n\n*(Note: Identified based on filename in demo mode. Add Baidu/Google API key for AI recognition.)*"
+                simulation_note = "\n\n*(Note: Identified based on filename in demo mode.)*"
         else:
-             simulation_note = "\n\n*(Note: Identified by AI Vision)*"
+             simulation_note = "\n\n*(Note: Identified by Google Reverse Image Search)*"
 
         formatted_response = f"""🏛️ **{landmark_info["name"]}**
 
@@ -525,5 +476,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Landmark Recognition API",
-        "features": ["Image upload support", "AI-powered recognition", "Travel information", "Simulated fallback"]
+        "features": ["Image upload support", "AI-powered recognition (SerpApi)", "Travel information", "Simulated fallback"]
     }
