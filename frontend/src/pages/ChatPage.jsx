@@ -25,23 +25,23 @@ const ChatPage = () => {
   // 根据 featureId 映射到不同的后端 API URL
   const getApiEndpoint = () => {
     switch (featureId) {
-      case 'weather': return 'http://localhost:8000/api/weather/query';
-      case 'translate': return 'http://localhost:8000/api/translate/do';
-      case 'currency': return 'http://localhost:8000/api/currency/convert';
-      case 'travel': return 'http://localhost:8000/api/travel/ask';
+      case 'weather': return 'http://103.189.140.199:8000/api/weather/query';
+      case 'translate': return 'http://103.189.140.199:8000/api/translate/do';
+      case 'currency': return 'http://103.189.140.199:8000/api/currency/convert';
+      case 'travel': return 'http://103.189.140.199:8000/api/travel/ask';
       case 'landmark': return null; // Special case - uses file upload
       case 'social_media': return null; // Special case - uses file upload
-      case 'timezone': return 'http://localhost:8000/api/timezone/convert';
-      case 'image_search': return 'http://localhost:8000/api/image_search/search';
+      case 'timezone': return 'http://103.189.140.199:8000/api/timezone/convert';
+      case 'image_search': return 'http://103.189.140.199:8000/api/image_search/search';
       // 新增的中国旅游功能
-      case 'attraction_tickets': return 'http://localhost:8000/api/attraction_tickets/query';
-      case 'hotel_booking': return 'http://localhost:8000/api/hotel_recommendations/recommend';
-      case 'transport_route': return 'http://localhost:8000/api/transport_route/plan';
-      case 'china_experience': return 'http://localhost:8000/api/china_experience/explore';
-      case 'visa_info': return 'http://localhost:8000/api/visa_info/query';
-      case 'travel_insurance': return 'http://localhost:8000/api/travel_insurance/recommend';
-      case 'budget_estimator': return 'http://localhost:8000/api/budget_estimator/estimate';
-      case 'ticket_recognition': return 'http://localhost:8000/api/ticket_recognition/upload';
+      case 'attraction_tickets': return 'http://103.189.140.199:8000/api/attraction_tickets/query';
+      case 'hotel_booking': return 'http://103.189.140.199:8000/api/hotel_recommendations/recommend';
+      case 'transport_route': return 'http://103.189.140.199:8000/api/transport_route/plan';
+      case 'china_experience': return 'http://103.189.140.199:8000/api/china_experience/explore';
+      case 'visa_info': return 'http://103.189.140.199:8000/api/visa_info/query';
+      case 'travel_insurance': return 'http://103.189.140.199:8000/api/travel_insurance/recommend';
+      case 'budget_estimator': return 'http://103.189.140.199:8000/api/budget_estimator/estimate';
+      case 'ticket_recognition': return 'http://103.189.140.199:8000/api/ticket_recognition/upload';
       default: return null;
     }
   };
@@ -197,7 +197,7 @@ const ChatPage = () => {
           // Show typing status
           setMessages(prev => [...prev, { sender: 'bot', text: 'Processing ticket...', isTyping: true }]);
 
-          const res = await axios.post('http://localhost:8000/api/ticket_recognition/upload', formData, {
+          const res = await axios.post('http://103.189.140.199:8000/api/ticket_recognition/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
 
@@ -418,7 +418,7 @@ const ChatPage = () => {
       // Show typing status
       setMessages(prev => [...prev, { sender: 'bot', text: 'Analyzing the image...', isTyping: true }]);
 
-      const res = await axios.post('http://localhost:8000/api/landmark/recognize', formData, {
+      const res = await axios.post('http://103.189.140.199:8000/api/landmark/recognize', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -463,7 +463,7 @@ const ChatPage = () => {
       // Show typing status
       setMessages(prev => [...prev, { sender: 'bot', text: 'Analyzing your description...', isTyping: true }]);
 
-      const res = await axios.post('http://localhost:8000/api/landmark/describe', {
+      const res = await axios.post('http://103.189.140.199:8000/api/landmark/describe', {
         description: currentInput
       });
 
@@ -512,7 +512,7 @@ const ChatPage = () => {
       // Show typing status
       setMessages(prev => [...prev, { sender: 'bot', text: 'Generating social media caption...', isTyping: true }]);
 
-      const res = await axios.post('http://localhost:8000/api/social_media/generate', formData, {
+      const res = await axios.post('http://103.189.140.199:8000/api/social_media/generate', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

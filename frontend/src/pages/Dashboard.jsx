@@ -40,7 +40,7 @@ const Dashboard = () => {
   const fetchUserInfo = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:8000/api/auth/me', {
+      const response = await axios.get('http://103.189.140.199:8000/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -86,7 +86,7 @@ const Dashboard = () => {
         updateData.password = profileData.password;
       }
 
-      const response = await axios.put('http://localhost:8000/api/auth/me', updateData, {
+      const response = await axios.put('http://103.189.140.199:8000/api/auth/me', updateData, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -114,7 +114,7 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:8000/api/auth/upload_avatar', formData, {
+      const response = await axios.post('http://103.189.140.199:8000/api/auth/upload_avatar', formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'

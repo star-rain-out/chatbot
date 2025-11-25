@@ -81,7 +81,7 @@ tar -czf chatbot-project.tar.gz chatbot/
 1. 解压文件到任意目录
 2. 双击运行 start-backend.bat（启动后端）
 3. 双击运行 start-frontend.bat（启动前端）
-4. 打开浏览器访问 http://localhost:3000
+4. 打开浏览器访问 http://103.189.140.199:3000
 
 详细说明请参考 README.md
 ```
@@ -234,7 +234,7 @@ git clone <your-repo-url>
 2. 解压/克隆项目
 3. 运行 `start-backend.bat`（后端）
 4. 运行 `start-frontend.bat`（前端）
-5. 访问 http://localhost:3000
+5. 访问 http://103.189.140.199:3000
 
 **详细文档：**
 请参考项目中的 README.md 文件
@@ -300,8 +300,8 @@ chmod +x start-frontend.sh
 
 1. ✅ 解压/克隆项目
 2. ✅ 安装依赖成功
-3. ✅ 后端启动成功（http://localhost:8000）
-4. ✅ 前端启动成功（http://localhost:3000）
+3. ✅ 后端启动成功（http://103.189.140.199:8000）
+4. ✅ 前端启动成功（http://103.189.140.199:3000）
 5. ✅ 能够注册新用户
 6. ✅ 能够登录
 7. ✅ 所有功能正常工作

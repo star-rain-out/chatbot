@@ -200,7 +200,7 @@ start-frontend.bat # 新终端
 2. 安装 Python 3.8+ 和 Node.js 14.x+
 3. 运行 start-backend.bat
 4. 运行 start-frontend.bat
-5. 访问 http://localhost:3000
+5. 访问 http://103.189.140.199:3000
 
 详细说明见 README.md
 ```

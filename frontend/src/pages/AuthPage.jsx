@@ -21,8 +21,8 @@ const AuthPage = () => {
 
     try {
       const apiUrl = isLogin
-        ? 'http://localhost:8000/api/auth/login'
-        : 'http://localhost:8000/api/auth/register';
+        ? 'http://103.189.140.199:8000/api/auth/login'
+        : 'http://103.189.140.199:8000/api/auth/register';
 
       const requestData = isLogin
         ? { email, password }

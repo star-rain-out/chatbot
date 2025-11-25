@@ -60,9 +60,9 @@ start-frontend.bat
 ```
 
 4. **Access the application**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+- Frontend: http://103.189.140.199:3000
+- Backend API: http://103.189.140.199:8000
+- API Docs: http://103.189.140.199:8000/docs
 
 ### Method 2: Manual Setup
 
@@ -98,7 +98,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The backend will be available at `http://localhost:8000`
+The backend will be available at `http://103.189.140.199:8000`
 
 #### Frontend Setup
 
@@ -117,7 +117,7 @@ npm install
 npm start
 ```
 
-The frontend will automatically open at `http://localhost:3000`
+The frontend will automatically open at `http://103.189.140.199:3000`
 
 ## 📁 Project Structure
 
@@ -179,7 +179,7 @@ If you change the backend port, update the API endpoints in:
 - `frontend/src/pages/ChatPage.jsx`
 - `frontend/src/pages/Dashboard.jsx`
 
-Look for `http://localhost:8000` and replace with your backend URL.
+Look for `http://103.189.140.199:8000` and replace with your backend URL.
 
 ## 👥 User Guide
 
@@ -227,13 +227,13 @@ Look for `http://localhost:8000` and replace with your backend URL.
 - **Password Hashing**: Passwords are encrypted using bcrypt
 - **JWT Authentication**: Secure token-based authentication
 - **Token Expiration**: 30-minute session timeout
-- **CORS Protection**: Configured for localhost development
+- **CORS Protection**: Configured for 103.189.140.199 development
 
 ## 📡 API Documentation
 
 After starting the backend, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://103.189.140.199:8000/docs
+- **ReDoc**: http://103.189.140.199:8000/redoc
 
 ### Main API Endpoints
 
@@ -281,7 +281,7 @@ npm install
 
 ### Login not working
 - **Issue**: Backend not running or CORS error
-- **Solution**: Ensure backend is running at http://localhost:8000
+- **Solution**: Ensure backend is running at http://103.189.140.199:8000
 
 ## 📦 Deployment
 

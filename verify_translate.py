@@ -2,7 +2,7 @@ import requests
 import json
 
 def test_translate(text):
-    url = "http://localhost:8000/api/translate/do"
+    url = "http://103.189.140.199:8000/api/translate/do"
     payload = {"text": text}
     headers = {"Content-Type": "application/json"}
     

@@ -16,12 +16,12 @@ def test_travel_api():
 
     try:
         # This would work if the server was running
-        # response = requests.post("http://localhost:8000/api/travel/ask", json=test_question)
+        # response = requests.post("http://103.189.140.199:8000/api/travel/ask", json=test_question)
         # print("Travel API Response:", response.json())
 
         # For now, just show the expected request format
         print("✅ Travel API request format:", json.dumps(test_question, indent=2))
-        print("📍 Expected endpoint: POST http://localhost:8000/api/travel/ask")
+        print("📍 Expected endpoint: POST http://103.189.140.199:8000/api/travel/ask")
 
     except Exception as e:
         print(f"❌ Error testing travel API: {e}")
@@ -36,7 +36,7 @@ def test_landmark_api_text():
 
     try:
         print("✅ Landmark text API request format:", json.dumps(test_description, indent=2))
-        print("📍 Expected endpoint: POST http://localhost:8000/api/landmark/describe")
+        print("📍 Expected endpoint: POST http://103.189.140.199:8000/api/landmark/describe")
 
     except Exception as e:
         print(f"❌ Error testing landmark text API: {e}")
@@ -47,7 +47,7 @@ def test_landmark_api_image():
 
     # This would require a multipart/form-data request
     print("✅ Landmark image API requires:")
-    print("   - Method: POST http://localhost:8000/api/landmark/recognize")
+    print("   - Method: POST http://103.189.140.199:8000/api/landmark/recognize")
     print("   - Content-Type: multipart/form-data")
     print("   - Field: image (file upload)")
     print("   - Supported formats: JPEG, PNG, GIF")
@@ -57,9 +57,9 @@ def test_health_endpoints():
     print("\n🧪 Testing Health Endpoints...")
 
     endpoints = [
-        ("Travel API", "GET http://localhost:8000/api/travel/health"),
-        ("Landmark API", "GET http://localhost:8000/api/landmark/health"),
-        ("Main API", "GET http://localhost:8000/")
+        ("Travel API", "GET http://103.189.140.199:8000/api/travel/health"),
+        ("Landmark API", "GET http://103.189.140.199:8000/api/landmark/health"),
+        ("Main API", "GET http://103.189.140.199:8000/")
     ]
 
     for api_name, endpoint in endpoints:

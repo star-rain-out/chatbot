@@ -233,7 +233,7 @@ async def upload_avatar(file: UploadFile = File(...), current_user: dict = Depen
             shutil.copyfileobj(file.file, buffer)
             
         # Return URL
-        avatar_url = f"http://localhost:8000/static/avatars/{filename}"
+        avatar_url = f"http://103.189.140.199:8000/static/avatars/{filename}"
         
         # Update user profile with new avatar URL
         users = load_users()
